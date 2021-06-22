@@ -108,7 +108,7 @@ class WindowAttention(nn.Module):
                                                             upper_lower=False, left_right=True), requires_grad=False)
 
         self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
-
+#第一个难点. 相对位置编码!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         if self.relative_pos_embedding:  # 这个都是启用的.
             self.relative_indices = get_relative_distances(window_size) + window_size - 1  # 虽然全部的索引是49*49 但是里面的数是从-6 到6 的一共13个数, 所以我们下一行就是13*13就足够了.
             self.pos_embedding = nn.Parameter(  torch.randn(2 * window_size - 1, 2 * window_size - 1)  ) # 因为窗口是7, 所以最大和最小差距是12, 我们每次处理的是窗口和窗口之间的交叉部分. 所以最大是-6 到6.
@@ -116,7 +116,7 @@ class WindowAttention(nn.Module):
             self.pos_embedding = nn.Parameter(torch.randn(window_size ** 2, window_size ** 2))
 
         self.to_out = nn.Linear(inner_dim, dim)
-
+#=========第二个难点.mask!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     def forward(self, x):       # 下面这个函数就是整个的最核心的布冯了!!!!!!!!!!!!!!!也很短!!!!!!!!!
         if self.shifted:
             x = self.cyclic_shift(x)
@@ -132,7 +132,7 @@ class WindowAttention(nn.Module):
                                 h=h, w_h=self.window_size, w_w=self.window_size), qkv)
 
         dots = einsum('b h w i d, b h w j d -> b h w i j', q, k) * self.scale  # 我们算的是  最后的dimension 进行乘机消去.  得到的就是 bhwij.    1,3, 64, 49 ,49   .因为一个图片最后是切成了  从 224*224--------->56*56 ------>然后再拼成window-------> 7*7----------->dots:   1,3, 64, 49 ,49          3是3个head, 64是8*8个, 每一个里面是一个7*7的window, 每一个window 里面的特征是 patch 代表的.======================================整体再分析一下. 一个图片里面有64个window. 然后一个windows 里面有 49个patch, 相对注意力,就是windows内部计算的.
-        self.relative_indices=self.relative_indices.type(torch.long) # 注意相对注意力是有正负区分的. 所以上来中间数是6, 这个地方玩的是索引.
+        self.relative_indices=self.relative_indices.type(torch.long) # 注意相对注意力是有正负区分的. 所以上来中间数是6, 这个地方玩的是索引. 这里面第一个6,6 表示的就是自己这个patch跟自己的注意力.因为 -6->0->6  其中0 跟0 就是索引6 跟6. 所以第一个自己跟自己就是6,6的索引.
         if self.relative_pos_embedding: # 跟nlp一样加入位置编码. 位置编码的计算也是7*7 里面的       # 我们代码里面一直用的就是这个部分. 来走的.
             dots += self.pos_embedding[self.relative_indices[:, :, 0], self.relative_indices[:, :, 1]]
         else:
@@ -159,7 +159,7 @@ class WindowAttention(nn.Module):
 
 
 
-            dots[:, :, nw_w - 1::nw_w] += self.left_right_mask # 7 跳着走,步长为8.
+            dots[:, :, nw_w - 1::nw_w] += self.left_right_mask # 7 跳着走,步长为8.+ 搞定.
 
 
             # 下面看left_right_mask的计算方法:
